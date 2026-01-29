@@ -15,10 +15,13 @@ def read_pdf(file):
 
 
 
-st.title("📄 Document Question Answering")
-
+st.title("📄 PDF READER")
+lab1 = st.Page("labs/lab1.py", title = ' Lab 1 ', icon = '📝' )
+lab2 = st.Page("labs/lab2.py", title = ' Lab 2 ', icon = '📝' )
+pg = st.navigation( {lab2, lab1})
 openai_api_key = secret_key
-
+st.set_page_config(page_title = 'IST 488 Labs',
+    initial_sidebar_state = 'expanded')
 
 # Initialize session state if needed
 if "api_key_valid" not in st.session_state:
