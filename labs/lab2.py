@@ -1,9 +1,8 @@
 import streamlit as st
-
-secret_key = st.secrets.OPENAI_API_KEY
-
 from openai import OpenAI
 from PyPDF2 import PdfReader
+
+secret_key = st.secrets.OPENAI_API_KEY
 
 def read_pdf(file):
     reader = PdfReader(file)
@@ -15,15 +14,6 @@ def read_pdf(file):
 st.title("📄 Lab 2")
 
 openai_api_key = secret_key
-
-# Initialize session state if needed
-if "api_key_valid" not in st.session_state:
-    st.session_state.api_key_valid = False
-
-if not st.session_state.api_key_valid:
-    st.info("Please enter a valid OpenAI API key to continue.", icon="🗝️")
-    st.stop()
-
 client = OpenAI(api_key=openai_api_key)
 
 uploaded_file = st.file_uploader(
@@ -64,7 +54,7 @@ if uploaded_file and generate:
     if use_advanced:
         model = "gpt-4o"
     else:
-        model = "gpt-3.5-nano"
+        model = 'gpt-3.5-turbo'
 
     # Include the summary type explicitly in the LLM instructions
     instruction = (
