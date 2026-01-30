@@ -25,9 +25,9 @@ st.sidebar.header("Summary Options")
 summary_type = st.sidebar.selectbox(
     "Type of summary",
     [
-        "Summarize the document in 100 words",
-        "Summarize the document in 2 connecting paragraphs",
-        "Summarize the document in 5 bullet points",
+        "Summarize in 100 words",
+        "Summarize in 2 connecting paragraphs",
+        "Summarize in 5 bullet points",
     ],
 )
 
