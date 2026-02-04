@@ -1,6 +1,5 @@
 import streamlit as st
 import openai
-import tiktoken
 
 # --- Config ---
 st.set_page_config(page_title="Lab 3: Streaming Chatbot", initial_sidebar_state="expanded")
@@ -9,16 +8,13 @@ openai.api_key = st.secrets.get("OPENAI_API_KEY", "")
 # --- Parameters ---
 MAX_TOKENS = st.sidebar.number_input("Max tokens in buffer", min_value=256, max_value=4096, value=1024, step=64)
 
-# --- Tokenizer ---
-def count_tokens(messages, model="gpt-3.5-turbo"):
-    enc = tiktoken.encoding_for_model(model)
-    num_tokens = 0
+# --- Tokenizer (using OpenAI's token counting) ---
+def count_tokens(messages):
+    # Approximate token count: ~4 chars per token on average
+    total_chars = 0
     for msg in messages:
-        num_tokens += 4  # every message metadata
-        for key, value in msg.items():
-            num_tokens += len(enc.encode(str(value)))
-    num_tokens += 2  # priming
-    return num_tokens
+        total_chars += len(msg.get("content", "")) + 4  # metadata overhead
+    return max(1, total_chars // 4)
 
 # --- Conversation Buffer ---
 def get_buffered_messages(messages, max_tokens):
