@@ -1,9 +1,9 @@
 import streamlit as st
-import openai
+from openai import OpenAI
 
 # --- Config ---
 st.set_page_config(page_title="Lab 3: Streaming Chatbot", initial_sidebar_state="expanded")
-openai.api_key = st.secrets.get("OPENAI_API_KEY", "")
+client = OpenAI(api_key=st.secrets.get("OPENAI_API_KEY", ""))
 
 # --- Parameters ---
 MAX_TOKENS = st.sidebar.number_input("Max tokens in buffer", min_value=256, max_value=4096, value=1024, step=64)
@@ -52,8 +52,6 @@ SYSTEM_PROMPT = (
 # --- Session State ---
 if "messages" not in st.session_state:
     st.session_state.messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-if "awaiting_more_info" not in st.session_state:
-    st.session_state.awaiting_more_info = False
 
 st.title("Lab 3: Streaming Chatbot")
 
@@ -65,17 +63,18 @@ user_input = st.chat_input("Ask me anything!")
 
 def stream_chat(messages):
     response = ""
-    for chunk in openai.ChatCompletion.create(
+    with client.chat.completions.create(
         model="gpt-3.5-turbo",
         messages=messages,
         stream=True,
         max_tokens=256,
         temperature=0.7,
-    ):
-        delta = chunk["choices"][0]["delta"]
-        if "content" in delta:
-            response += delta["content"]
-            yield delta["content"]
+    ) as stream:
+        for chunk in stream:
+            delta = chunk.choices[0].delta
+            if delta.content:
+                response += delta.content
+                yield delta.content
     return response
 
 if user_input:
