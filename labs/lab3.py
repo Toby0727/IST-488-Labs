@@ -85,10 +85,11 @@ if user_input:
             st.session_state.messages.append({"role": "user", "content": user_input})
             buffered = get_buffered_messages(st.session_state.messages, MAX_TOKENS)
             with st.chat_message("assistant"):
+                placeholder = st.empty()
                 response = ""
                 for chunk in stream_chat(buffered):
-                    st.write(chunk, end="")
                     response += chunk
+                    placeholder.write(response)
                 st.session_state.messages.append({"role": "assistant", "content": response})
         elif user_input.lower() in ["no", "n"]:
             st.session_state.messages.append({"role": "user", "content": user_input})
@@ -106,10 +107,11 @@ if user_input:
         st.session_state.messages.append({"role": "user", "content": user_input})
         buffered = get_buffered_messages(st.session_state.messages, MAX_TOKENS)
         with st.chat_message("assistant"):
+            placeholder = st.empty()
             response = ""
             for chunk in stream_chat(buffered):
-                st.write(chunk, end="")
                 response += chunk
+                placeholder.write(response)
             st.session_state.messages.append({"role": "assistant", "content": response})
 
 # --- Token Count Display ---
