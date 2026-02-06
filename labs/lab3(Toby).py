@@ -20,6 +20,33 @@ model_option = st.sidebar.selectbox(
     index=0  # Default to first option (gpt-3.5-turbo)
 )
 
+# ===== ADD THIS: BUFFER TYPE SELECTOR =====
+buffer_type = st.sidebar.radio(
+    "Buffer Type:",
+    options=["Message-based", "Token-based"],
+    index=0
+)
+
+# ===== ADD THIS: BUFFER CONTROLS =====
+if buffer_type == "Message-based":
+    buffer_size = st.sidebar.slider(
+        "Number of exchanges to remember:",
+        min_value=1,
+        max_value=10,
+        value=2,
+        step=1
+    )
+    st.sidebar.write(f"**Keeping last {buffer_size} exchanges**")
+else:
+    max_tokens = st.sidebar.slider(
+        "Max tokens for context:",
+        min_value=100,
+        max_value=20000,
+        value=1000,
+        step=100
+    )
+    st.sidebar.write(f"**Max tokens: {max_tokens}**")
+    
 # Initialize session state FIRST
 if "messages" not in st.session_state:
     st.session_state.messages = []
