@@ -6,6 +6,10 @@ from openai import OpenAI
 st.set_page_config(page_title="Lab 3: Streaming Chatbot", initial_sidebar_state="expanded")
 client = OpenAI(api_key=st.secrets.get("OPENAI_API_KEY", ""))
 
+# ===== BIG TITLE =====
+st.title("🌟 ASLINUR KNOWS IT ALL 🌟")
+st.markdown("---")
+
 # ===== MODEL SELECTOR (DROPDOWN) =====
 st.sidebar.title("Settings")
 model_option = st.sidebar.selectbox(
@@ -46,7 +50,7 @@ else:
         step=100
     )
     st.sidebar.write(f"**Max tokens: {max_tokens}**")
-    
+
 # Initialize session state FIRST
 if "messages" not in st.session_state:
     st.session_state.messages = []
