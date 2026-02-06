@@ -6,7 +6,7 @@ st.set_page_config(page_title="Lab 3: Streaming Chatbot", initial_sidebar_state=
 client = OpenAI(api_key=st.secrets.get("OPENAI_API_KEY", ""))
 
 # ===== BIG TITLE =====
-st.title("🇹🇷 ASLINUR KNOWS IT ALL 🇹🇷")
+st.title("CHURCH BOT 🤖⛪️")
 st.markdown("---")
 
 # ===== MODEL SELECTOR =====
