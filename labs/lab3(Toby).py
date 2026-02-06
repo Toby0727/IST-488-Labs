@@ -1,8 +1,7 @@
 import streamlit as st
 from openai import OpenAI
 
-
-# prompt and user
+# Page config
 st.set_page_config(page_title="Lab 3: Streaming Chatbot", initial_sidebar_state="expanded")
 client = OpenAI(api_key=st.secrets.get("OPENAI_API_KEY", ""))
 
@@ -10,7 +9,7 @@ client = OpenAI(api_key=st.secrets.get("OPENAI_API_KEY", ""))
 st.title("🇹🇷 ASLINUR KNOWS IT ALL 🇹🇷")
 st.markdown("---")
 
-# ===== MODEL SELECTOR (DROPDOWN) =====
+# ===== MODEL SELECTOR =====
 st.sidebar.title("Settings")
 model_option = st.sidebar.selectbox(
     "Select Model:",
@@ -21,17 +20,17 @@ model_option = st.sidebar.selectbox(
         "gpt-4o",
         "gpt-4o-mini"
     ],
-    index=0  # Default to first option (gpt-3.5-turbo)
+    index=0
 )
 
-# ===== ADD THIS: BUFFER TYPE SELECTOR =====
+# ===== BUFFER TYPE SELECTOR =====
 buffer_type = st.sidebar.radio(
     "Buffer Type:",
     options=["Message-based", "Token-based"],
     index=0
 )
 
-# ===== ADD THIS: BUFFER CONTROLS =====
+# ===== BUFFER CONTROLS =====
 if buffer_type == "Message-based":
     buffer_size = st.sidebar.slider(
         "Number of exchanges to remember:",
@@ -51,56 +50,106 @@ else:
     )
     st.sidebar.write(f"**Max tokens: {max_tokens}**")
 
-# ===== ADD THESE HELPER FUNCTIONS =====
-# TOKEN COUNTS
+# ===== SYSTEM PROMPT =====
+SYSTEM_PROMPT = {
+    "role": "system",
+    "content": """You are a helpful educational assistant that explains things in a way that 10-year-olds can understand.
 
+After answering each question:
+1. Give a clear, simple answer that a 10-year-old can understand
+2. Then ask: "Do you want more info?"
+
+If the user says "Yes" or wants more information:
+- Provide additional details (still keeping it simple for a 10-year-old)
+- Ask again: "Do you want more info?"
+
+If the user says "No" or doesn't want more information:
+- Say something friendly like "Okay! What else can I help you with?"
+- Be ready for their next question
+
+Remember: Always use simple words and fun examples that kids can relate to!"""
+}
+
+# ===== HELPER FUNCTIONS =====
 def count_tokens_approximate(messages):
-    """
-    Approximate token count without tiktoken
-    Rule: 1 token ≈ 4 characters
-    """
+    """Approximate token count: 1 token ≈ 4 characters"""
     total_chars = 0
     for message in messages:
         total_chars += len(message.get("role", ""))
         total_chars += len(message.get("content", ""))
-        total_chars += 20  # Formatting overhead
+        total_chars += 20
     return total_chars // 4
 
 def get_buffered_messages(all_messages, buffer_size=2):
-    """Keep only the last N user/assistant message pairs"""
-    if len(all_messages) <= buffer_size * 2:
-        return all_messages
-    return all_messages[-(buffer_size * 2):]
+    """
+    Keep system prompt + last N user/assistant message pairs
+    System prompt is ALWAYS kept!
+    """
+    if len(all_messages) == 0:
+        return []
+    
+    # Extract system prompt (should be first message)
+    system_prompt = all_messages[0] if all_messages[0]["role"] == "system" else None
+    
+    # Get conversation messages (everything after system prompt)
+    conversation = all_messages[1:] if system_prompt else all_messages
+    
+    # If conversation is short, return system + all conversation
+    if len(conversation) <= buffer_size * 2:
+        return [system_prompt] + conversation if system_prompt else conversation
+    
+    # Keep only last (buffer_size * 2) conversation messages
+    buffered_conversation = conversation[-(buffer_size * 2):]
+    
+    # Return system prompt + buffered conversation
+    return [system_prompt] + buffered_conversation if system_prompt else buffered_conversation
 
 def get_token_buffered_messages(all_messages, max_tokens=1000):
-    """Keep messages that fit within token limit"""
+    """
+    Keep system prompt + messages that fit within token limit
+    System prompt is ALWAYS kept!
+    """
     if not all_messages:
         return []
     
+    # Extract system prompt (should be first message)
+    system_prompt = all_messages[0] if all_messages[0]["role"] == "system" else None
+    
+    # Get conversation messages
+    conversation = all_messages[1:] if system_prompt else all_messages
+    
+    # Count system prompt tokens
+    system_tokens = count_tokens_approximate([system_prompt]) if system_prompt else 0
+    
+    # Calculate remaining tokens for conversation
+    remaining_tokens = max_tokens - system_tokens
+    
+    if remaining_tokens <= 0:
+        return [system_prompt] if system_prompt else []
+    
+    # Build buffered conversation from most recent messages
     buffered = []
     current_tokens = 0
     
-    for message in reversed(all_messages):
+    for message in reversed(conversation):
         message_tokens = count_tokens_approximate([message])
-        if current_tokens + message_tokens > max_tokens:
+        if current_tokens + message_tokens > remaining_tokens:
             break
         buffered.insert(0, message)
         current_tokens += message_tokens
     
-    return buffered
+    # Return system prompt + buffered conversation
+    return [system_prompt] + buffered if system_prompt else buffered
 
-# Initialize session state FIRST (you already have this)
+# Initialize session state WITH system prompt
 if "messages" not in st.session_state:
-    st.session_state.messages = []
+    st.session_state.messages = [SYSTEM_PROMPT]
 
-# Initialize session state FIRST
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-# Display all previous messages
+# Display all previous messages (skip system prompt)
 for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+    if message["role"] != "system":  # Don't show system prompt to user
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
 # Get user input
 if prompt := st.chat_input("Feel free to open up to me"):
@@ -112,13 +161,13 @@ if prompt := st.chat_input("Feel free to open up to me"):
     with st.chat_message("user"):
         st.markdown(prompt)
     
-    # ===== CREATE BUFFERED MESSAGES =====
+    # Create buffered messages (ALWAYS includes system prompt)
     if buffer_type == "Message-based":
         buffered_messages = get_buffered_messages(st.session_state.messages, buffer_size)
-    else:  # Token-based
+    else:
         buffered_messages = get_token_buffered_messages(st.session_state.messages, max_tokens)
     
-    # ===== DISPLAY BUFFER STATISTICS =====
+    # Display statistics
     tokens_in_buffer = count_tokens_approximate(buffered_messages)
     total_tokens = count_tokens_approximate(st.session_state.messages)
     
@@ -128,18 +177,16 @@ if prompt := st.chat_input("Feel free to open up to me"):
     st.sidebar.write(f"Total messages: {len(st.session_state.messages)}")
     st.sidebar.write(f"Approx tokens in buffer: ~{tokens_in_buffer}")
     st.sidebar.write(f"Approx total tokens: ~{total_tokens}")
+    st.sidebar.write(f"System prompt included: ✅")
     
-    # Get and display assistant response (streaming)
+    # Get and display assistant response
     with st.chat_message("assistant"):
         stream = client.chat.completions.create(
             model=model_option,
-            messages=buffered_messages,  # ← FIX: Use buffered_messages!
+            messages=buffered_messages,  # Includes system prompt!
             stream=True
         )
         response = st.write_stream(stream)
     
-    # Save assistant response to history
-    st.session_state.messages.append({"role": "assistant", "content": response})
-    
-    # Save assistant response to history
+    # Save assistant response
     st.session_state.messages.append({"role": "assistant", "content": response})
