@@ -1,3 +1,4 @@
+import PyPDF2
 import streamlit as st
 from openai import OpenAI
 import sys
@@ -224,17 +225,56 @@ if 'openai_client' not in st.session_state:
 # Collection = collection, already established
 # text = extraced text from PDF files
 # Embeddings inserted into the collection from OpenAI
-def add_to_collection (collection, text, file_name):
-    # Create embedding for the text
-    embedding = st.session_state.openai_client.embeddings.create(
-        input=text,
-        model="text-embedding-3-small"
-    ).data[0].embedding
 
-    # Add the text and its embedding to the collection
-    collection.add(
-        documents=[text],
-        embeddings=[embedding],
-        ids=[file_name]
-    )
+# Check if collection is already populated (avoid re-embedding)
+existing_count = collection.count()
+
+uploaded_file = st.file_uploader("Upload PDF", type="pdf")
+
+if uploaded_file is not None:
+    pdf_reader = PdfReader(uploaded_file)
+    
+    text_content = ""
+    for page in pdf_reader.pages:
+        text_content += page.extract_text() or ""
+    
+    # now embed and store
+
+if existing_count == 0:
+    # Define the path to PDF files
+    pdf_folder = Path("./pdf_files")
+    
+    if pdf_folder.exists() and pdf_folder.is_dir():
+        pdf_files = list(pdf_folder.glob("*.pdf"))
+        
+        # Process each PDF file
+        for pdf_file in pdf_files:
+            try:
+                # Read PDF and extract text
+                pdf_reader = PyPDF2.PdfReader(str(pdf_file))
+                text_content = ""
+                
+                # Extract text from all pages
+                for page in pdf_reader.pages:
+                    text_content += page.extract_text() + "\n"
+                
+                # Add to collection if there's content
+                if text_content.strip():
+                    # Create embedding using OpenAI "text-embedding-3-small"
+                    embedding = st.session_state.openai_client.embeddings.create(
+                        input=text_content,
+                        model="text-embedding-3-small"  # OpenAI embeddings model
+                    ).data[0].embedding
+                    
+                    # Add to ChromaDB collection
+                    collection.add(
+                        documents=[text_content],      # The text
+                        embeddings=[embedding],         # The vector from OpenAI
+                        ids=[pdf_file.name],           # Unique ID (filename)
+                        metadatas=[{"filename": pdf_file.name}]  # Metadata
+                    )
+                    
+            except Exception as e:
+                st.sidebar.error(f"Error loading {pdf_file.name}: {str(e)}")
+
 
