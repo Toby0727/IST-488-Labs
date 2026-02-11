@@ -2,9 +2,14 @@ import PyPDF2
 import streamlit as st
 from openai import OpenAI
 import sys
-import chromadb
 from pathlib import Path
 from PyPDF2 import PdfReader
+
+# Ensure ChromaDB uses a compatible SQLite
+__import__("pysqlite3")
+sys.modules["sqlite3"] = sys.modules["pysqlite3"]
+
+import chromadb
 
 
 # Page config
@@ -16,10 +21,6 @@ st.title("CHURCH BOT 🤖⛪️")
 st.markdown("---")
 
 # ===== ChromaDB Setup ====
-# fixing
-__import__('pysqlite3')
-sys.modules['sqlite3'] = sys.modules['pysqlite3']
-
 #create ChromaDB client
 chroma_client = chromadb.PersistentClient(path='./ChromaDB_for_lab')
 collection = chroma_client.get_or_create_collection(name="Lab4Collection")
@@ -41,7 +42,7 @@ existing_count = collection.count()
 
 if existing_count == 0:
     # Define the path to PDF files relative to this file
-    pdf_folder = Path("./lab4_data")
+    pdf_folder = Path(__file__).parent / "lab4_data"
     
     if pdf_folder.exists() and pdf_folder.is_dir():
         pdf_files = list(pdf_folder.glob("*.pdf"))
@@ -77,9 +78,9 @@ if existing_count == 0:
                     )
                     
             except Exception as e:
-             st.sidebar.error(f"Error loading {pdf_file.name}: {str(e)}")
+                st.sidebar.error(f"Error loading {pdf_file.name}: {str(e)}")
 
-st.session_state.Lab4_VectorDB = collection
+st.session_state.vector_db = collection
 
 
 
