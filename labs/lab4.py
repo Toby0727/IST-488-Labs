@@ -65,6 +65,7 @@ if existing_count == 0:
                         model="text-embedding-3-small"  # OpenAI embeddings model
                     ).data[0].embedding
                     
+                    st.write(text_content[:200])
                     # Add to ChromaDB collection
                     collection.add(
                         documents=[text_content],      # The text
