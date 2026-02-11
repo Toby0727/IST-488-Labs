@@ -21,8 +21,10 @@ st.title("CHURCH BOT 🤖⛪️")
 st.markdown("---")
 
 # ===== ChromaDB Setup ====
-#create ChromaDB client
-chroma_client = chromadb.PersistentClient(path='./ChromaDB_for_lab')
+# Use a writable directory for the DB (Streamlit Cloud repo is read-only)
+chroma_path = Path(st.secrets.get("CHROMA_PATH", "/tmp/chromadb"))
+chroma_path.mkdir(parents=True, exist_ok=True)
+chroma_client = chromadb.PersistentClient(path=str(chroma_path))
 collection = chroma_client.get_or_create_collection(name="Lab4Collection")
 
 # Create OpenAI client
