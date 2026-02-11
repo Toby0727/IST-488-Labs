@@ -57,13 +57,23 @@ except Exception:
     
 #embed and store
 
+# Define the path to PDF files relative to this file
+pdf_folder = Path(__file__).parent / "lab4_data"
+pdf_files = list(pdf_folder.glob("*.pdf")) if pdf_folder.exists() else []
+
+# Rebuild if the persisted DB is missing PDFs
+if existing_count < len(pdf_files):
+    try:
+        chroma_client.delete_collection(name="Lab4Collection")
+    except Exception:
+        shutil.rmtree(db_path, ignore_errors=True)
+
+    chroma_client = chromadb.PersistentClient(path=str(db_path))
+    collection = chroma_client.get_or_create_collection(name="Lab4Collection")
+    existing_count = 0
+
 if existing_count == 0:
-    # Define the path to PDF files relative to this file
-    pdf_folder = Path(__file__).parent / "lab4_data"
-    
     if pdf_folder.exists() and pdf_folder.is_dir():
-        pdf_files = list(pdf_folder.glob("*.pdf"))
-        
         # Process each PDF file
         for pdf_file in pdf_files:
             try:
