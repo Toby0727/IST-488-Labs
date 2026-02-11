@@ -22,8 +22,9 @@ st.title("CHURCH BOT 🤖⛪️")
 st.markdown("---")
 
 # ===== ChromaDB Setup ====
-# Create ChromaDB client with a stable path relative to this file
-db_path = Path(__file__).parent / "ChromaDB_for_lab"
+# Create ChromaDB client with a stable, writable path
+db_path = Path.home() / ".cache" / "lab4_chroma"
+db_path.mkdir(parents=True, exist_ok=True)
 chroma_client = chromadb.PersistentClient(path=str(db_path))
 collection = chroma_client.get_or_create_collection(name="Lab4Collection")
 
