@@ -50,6 +50,7 @@ if existing_count == 0:
         for pdf_file in pdf_files:
             try:
                 # Read PDF and extract text
+                print(f"Processing {pdf_file.name}...")
                 pdf_reader = PyPDF2.PdfReader(str(pdf_file))
                 text_content = ""
                 
@@ -58,6 +59,7 @@ if existing_count == 0:
                     text_content += page.extract_text() + "\n"
                 
                 # Add to collection if there's content
+
                 if text_content.strip():
                     # Create embedding using OpenAI "text-embedding-3-small"
                     embedding = st.session_state.openai_client.embeddings.create(
