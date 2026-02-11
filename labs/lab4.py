@@ -41,7 +41,7 @@ existing_count = collection.count()
 
 if existing_count == 0:
     # Define the path to PDF files relative to this file
-    pdf_folder = Path(__file__).parent / "lab4_data"
+    pdf_folder = Path("./lab4_data")
     
     if pdf_folder.exists() and pdf_folder.is_dir():
         pdf_files = list(pdf_folder.glob("*.pdf"))
