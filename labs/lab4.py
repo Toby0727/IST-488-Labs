@@ -13,7 +13,7 @@ import chromadb
 
 
 # Page config
-st.set_page_config(page_title="Lab 4: Streaming Chatbot", initial_sidebar_state="expanded")
+st.set_page_config(page_title="lab 4", initial_sidebar_state="expanded")
 client = OpenAI(api_key=st.secrets.get("OPENAI_API_KEY", ""))
 
 # ===== BIG TITLE =====
@@ -121,6 +121,4 @@ if topic:
 
 else:
     st.info("Enter a topic in the sidebar to search the collection.")
-
-
 
