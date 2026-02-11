@@ -2,6 +2,7 @@ import PyPDF2
 import streamlit as st
 from openai import OpenAI
 import sys
+import shutil
 from pathlib import Path
 from PyPDF2 import PdfReader
 
@@ -21,8 +22,9 @@ st.title("CHURCH BOT 🤖⛪️")
 st.markdown("---")
 
 # ===== ChromaDB Setup ====
-#create ChromaDB client
-chroma_client = chromadb.PersistentClient(path='./ChromaDB_for_lab')
+# Create ChromaDB client with a stable path relative to this file
+db_path = Path(__file__).parent / "ChromaDB_for_lab"
+chroma_client = chromadb.PersistentClient(path=str(db_path))
 collection = chroma_client.get_or_create_collection(name="Lab4Collection")
 
 # Create OpenAI client
@@ -35,7 +37,22 @@ if 'openai_client' not in st.session_state:
 # Embeddings inserted into the collection from OpenAI
 
 # Check if collection is already populated (avoid re-embedding)
-existing_count = collection.count()
+try:
+    existing_count = collection.count()
+except Exception:
+    st.sidebar.warning("ChromaDB failed to load existing data. Rebuilding index.")
+    # Best-effort cleanup when the persisted DB is incompatible or corrupted
+    try:
+        chroma_client.delete_collection(name="Lab4Collection")
+    except Exception:
+        try:
+            shutil.rmtree(db_path, ignore_errors=True)
+        except Exception:
+            pass
+
+    chroma_client = chromadb.PersistentClient(path=str(db_path))
+    collection = chroma_client.get_or_create_collection(name="Lab4Collection")
+    existing_count = 0
 
     
 #embed and store
