@@ -36,20 +36,12 @@ if 'openai_client' not in st.session_state:
 # Check if collection is already populated (avoid re-embedding)
 existing_count = collection.count()
 
-uploaded_file = st.file_uploader("Upload PDF", type="pdf")
-
-if uploaded_file is not None:
-    pdf_reader = PdfReader(uploaded_file)
     
-    text_content = ""
-    for page in pdf_reader.pages:
-        text_content += page.extract_text() or ""
-    
-    # now embed and store
+#embed and store
 
 if existing_count == 0:
     # Define the path to PDF files
-    pdf_folder = Path("./pdf_files")
+    pdf_folder = Path("./lab4_data")
     
     if pdf_folder.exists() and pdf_folder.is_dir():
         pdf_files = list(pdf_folder.glob("*.pdf"))
