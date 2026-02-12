@@ -141,14 +141,14 @@ if prompt := st.chat_input("Ask me anything about ist courses"):
     ).data[0].embedding
     
     # Step 2: Search the vector database for relevant documents
-    results = st.session_state.Lab4_VectorDB.count(
+    results = st.session_state.Lab4_VectorDB.query(
         query_embeddings=[query_embedding],
         n_results=3  # Get top 3 most relevant documents
     )
     
     # Step 3: Extract the relevant context
-    relevant_docs = results['documents'][0]  # List of relevant document texts
-    context = "\n\n".join(relevant_docs)
+    relevant_docs = results.get("documents", [[]])[0]
+    context = "\n\n".join(relevant_docs) if relevant_docs else ""
     
     # Step 4: Create enhanced prompt with context
     system_prompt = """You are an information assistant with access to specific ist course syllabus documents. Use the provided context to answer the user's question. Always cite your sources from the context when answering. If the information is not in the context, say so.
