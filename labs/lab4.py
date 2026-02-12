@@ -4,7 +4,6 @@ from openai import OpenAI
 import sys
 import shutil
 from pathlib import Path
-from PyPDF2 import PdfReader
 
 # Ensure ChromaDB uses a compatible SQLite
 __import__("pysqlite3")
@@ -110,11 +109,12 @@ if existing_count == 0:
 
 
 # After your existing code where you stored the collection...
-st.session_state.vector_db = collection
+st.session_state.Lab4_VectorDB = collection
 
 
-# Display collection info
-st.sidebar.write(f"📚 Documents in database: {st.session_state.vector_db.count()}")
+st.sidebar.write(
+    f"📚 Documents in database: {st.session_state.Lab4_VectorDB.count()}"
+)
 
 # Initialize chat history
 if "messages" not in st.session_state:
@@ -126,7 +126,7 @@ for message in st.session_state.messages:
         st.markdown(message["content"])
 
 # Chat input
-if prompt := st.chat_input("Ask me anything about the church documents"):
+if prompt := st.chat_input("Ask me anything about ist courses"):
     
     # Display user message
     st.session_state.messages.append({"role": "user", "content": prompt})
@@ -141,7 +141,7 @@ if prompt := st.chat_input("Ask me anything about the church documents"):
     ).data[0].embedding
     
     # Step 2: Search the vector database for relevant documents
-    results = st.session_state.vector_db.query(
+    results = st.session_state.Lab4_VectorDB.count(
         query_embeddings=[query_embedding],
         n_results=3  # Get top 3 most relevant documents
     )
@@ -151,8 +151,33 @@ if prompt := st.chat_input("Ask me anything about the church documents"):
     context = "\n\n".join(relevant_docs)
     
     # Step 4: Create enhanced prompt with context
-    enhanced_prompt = f"""Use the following context from church documents to answer the question.
-    
+    system_prompt = """You are an information assistant with access to specific ist course syllabus documents. Use the provided context to answer the user's question. Always cite your sources from the context when answering. If the information is not in the context, say so.
+
+CRITICAL REQUIREMENTS:
+1. You MUST declare which specific file(s) you are using to answer each question
+2. Format your responses like this:
+   - "Based on [filename], [answer]..."
+   - "According to [filename], [answer]..."
+   - "Using information from [filename], [answer]..."
+
+3. ALWAYS mention the filename at the START of your response
+
+4. When using multiple files, list them: "Based on file1.pdf and file2.pdf..."
+
+5. When information is NOT in the documents:
+   - State: "I cannot find this information in the provided ist course syllabus documents."
+
+6. Be specific - always declare your source file!
+
+Example good responses:
+- "Based on mission_statement.pdf, the church's mission is..."
+- "According to bylaws.pdf and history.pdf, the church was founded..."
+- "I cannot find this information in the provided ist course syllabus documents (searched: bylaws.pdf, history.pdf, events.pdf)."
+
+Remember: ALWAYS declare which file you're using!"""
+
+    enhanced_prompt = f"""Use the following context from ist courses to answer the question.
+
 Context:
 {context}
 
@@ -165,7 +190,7 @@ Answer based on the context above. If the answer is not in the context, say so."
         stream = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a helpful assistant that answers questions about church documents. Use the provided context to answer accurately."},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": enhanced_prompt}
             ],
             stream=True
@@ -175,19 +200,12 @@ Answer based on the context above. If the answer is not in the context, say so."
     # Save assistant response
     st.session_state.messages.append({"role": "assistant", "content": response})
 
-# Optional: Show what documents were retrieved (for debugging)
-def _quote_under_20_words(text: str) -> str:
-    words = text.split()
-    excerpt = " ".join(words[:20])
-    if len(words) > 20:
-        excerpt += " ..."
-    return f'"{excerpt}"'
-
-
+# Sidebar to show retrieved documents
 if st.sidebar.checkbox("Show retrieved documents"):
-    if 'results' in locals():
-        for doc in results['documents'][0]:
-            st.sidebar.write(_quote_under_20_words(doc))
-
-
-
+    if "results" in locals() and results:
+        st.sidebar.write("### Retrieved Files:")
+        # results["metadatas"][0] contains metadata for top matches
+        for metadata in results["metadatas"][0]:
+            st.sidebar.write(f"- {metadata['filename']}")
+    else:
+        st.sidebar.write("No retrieval performed yet.")
