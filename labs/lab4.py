@@ -176,10 +176,10 @@ Answer based on the context above. If the answer is not in the context, say so."
     st.session_state.messages.append({"role": "assistant", "content": response})
 
 # Optional: Show what documents were retrieved (for debugging)
-def _quote_under_50_words(text: str) -> str:
+def _quote_under_20_words(text: str) -> str:
     words = text.split()
-    excerpt = " ".join(words[:50])
-    if len(words) > 50:
+    excerpt = " ".join(words[:20])
+    if len(words) > 20:
         excerpt += " ..."
     return f'"{excerpt}"'
 
@@ -187,7 +187,7 @@ def _quote_under_50_words(text: str) -> str:
 if st.sidebar.checkbox("Show retrieved documents"):
     if 'results' in locals():
         for doc in results['documents'][0]:
-            st.sidebar.write(_quote_under_50_words(doc))
+            st.sidebar.write(_quote_under_20_words(doc))
 
 
 
