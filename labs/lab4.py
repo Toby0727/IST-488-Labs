@@ -18,7 +18,7 @@ st.set_page_config(page_title="lab 4", initial_sidebar_state="expanded")
 client = OpenAI(api_key=st.secrets.get("OPENAI_API_KEY", ""))
 
 # ===== BIG TITLE =====
-st.title("CHURCH BOT 🤖⛪️")
+st.title("Lab 4: Chatbot using RAG")
 st.markdown("---")
 
 # ===== ChromaDB Setup ====
@@ -108,14 +108,10 @@ if existing_count == 0:
             except Exception as e:
                 st.sidebar.error(f"Error loading {pdf_file.name}: {str(e)}")
 
-st.session_state.vector_db = collection
-
-st.title("Lab 4: Chatbot using RAG")
 
 # After your existing code where you stored the collection...
 st.session_state.vector_db = collection
 
-st.title("Lab 4: Chatbot using RAG")
 
 # Display collection info
 st.sidebar.write(f"📚 Documents in database: {st.session_state.vector_db.count()}")
@@ -180,8 +176,18 @@ Answer based on the context above. If the answer is not in the context, say so."
     st.session_state.messages.append({"role": "assistant", "content": response})
 
 # Optional: Show what documents were retrieved (for debugging)
+def _quote_under_50_words(text: str) -> str:
+    words = text.split()
+    excerpt = " ".join(words[:50])
+    if len(words) > 50:
+        excerpt += " ..."
+    return f'"{excerpt}"'
+
+
 if st.sidebar.checkbox("Show retrieved documents"):
     if 'results' in locals():
-        st.sidebar.write("**Retrieved documents:**")
-        for i, doc in enumerate(results['documents'][0]):
-            st.sidebar.write(f"**Doc {i+1}:** {doc[:200]}...")  # Show first 200 chars
+        for doc in results['documents'][0]:
+            st.sidebar.write(_quote_under_50_words(doc))
+
+
+
