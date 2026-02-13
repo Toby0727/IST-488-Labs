@@ -240,11 +240,12 @@ if st.sidebar.checkbox("Show retrieved chunks"):
         results = st.session_state.last_results
         st.sidebar.write("### Retrieved Chunks:")
         
-    for i, metadata in enumerate(results["metadatas"][0], 1):
-        filename = metadata.get("filename", "Unknown")
-        chunk_idx = metadata.get("chunk_index", 0)
-        total = metadata.get("total_chunks", 1)
-        st.sidebar.write(f"{i}. **{filename}** (chunk {chunk_idx + 1}/{total})")
+        for i, metadata in enumerate(results["metadatas"][0], 1):
+            filename = metadata.get("filename", "Unknown")
+            chunk_idx = metadata.get("chunk_index", 0)
+            total = metadata.get("total_chunks", 1)
+            st.sidebar.write(f"{i}. **{filename}** (chunk {chunk_idx + 1}/{total})")
+        
     else:
         st.sidebar.write("No retrieval performed yet.")
 
