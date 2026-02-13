@@ -242,8 +242,8 @@ if st.sidebar.checkbox("Show retrieved chunks"):
         
         for i, metadata in enumerate(results["metadatas"][0], 1):
             filename = metadata.get("filename", "Unknown")
-            chunk_idx = metadata.get("chunk_index", "?")
-            total = metadata.get("total_chunks", "?")
+            chunk_idx = metadata.get("chunk_index", "0")
+            total = metadata.get("total_chunks", "0")
             
             st.sidebar.write(f"{i}. **{filename}** (chunk {chunk_idx + 1}/{total})")
     else:
