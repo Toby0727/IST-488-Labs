@@ -20,6 +20,32 @@ client = OpenAI(api_key=st.secrets.get("OPENAI_API_KEY", ""))
 st.title("Lab 4: Chatbot using RAG")
 st.markdown("---")
 
+# ===== CHUNKING FUNCTION =====
+def chunk_text(text, chunk_size=1000, overlap=200):
+    """
+    Split text into overlapping chunks
+    """
+    chunks = []
+    start = 0
+    text_length = len(text)
+    
+    while start < text_length:
+        end = start + chunk_size
+        chunk = text[start:end]
+        
+        # Try to break at sentence boundary
+        if end < text_length:
+            last_period = max(chunk.rfind('.'), chunk.rfind('?'), chunk.rfind('!'))
+            if last_period != -1 and last_period > chunk_size * 0.5:
+                end = start + last_period + 1
+                chunk = text[start:end]
+        
+        chunks.append(chunk.strip())
+        start = end - overlap if end < text_length else text_length
+    
+    return chunks
+
+
 # ===== ChromaDB Setup ====
 # Create ChromaDB client with a stable, writable path
 db_path = Path.home() / ".cache" / "lab4_chroma"
@@ -31,17 +57,11 @@ collection = chroma_client.get_or_create_collection(name="Lab4Collection")
 if 'openai_client' not in st.session_state:
     st.session_state.openai_client = OpenAI(api_key=st.secrets.OPENAI_API_KEY)
 
-# A function that will add documents to collection
-# Collection = collection, already established
-# text = extraced text from PDF files
-# Embeddings inserted into the collection from OpenAI
-
 # Check if collection is already populated (avoid re-embedding)
 try:
     existing_count = collection.count()
 except Exception:
     st.sidebar.warning("ChromaDB failed to load existing data. Rebuilding index.")
-    # Best-effort cleanup when the persisted DB is incompatible or corrupted
     try:
         chroma_client.delete_collection(name="Lab4Collection")
     except Exception:
@@ -53,9 +73,6 @@ except Exception:
     chroma_client = chromadb.PersistentClient(path=str(db_path))
     collection = chroma_client.get_or_create_collection(name="Lab4Collection")
     existing_count = 0
-
-    
-#embed and store
 
 # Define the path to PDF files relative to this file
 pdf_folder = Path(__file__).parent / "lab4_data"
@@ -74,11 +91,13 @@ if existing_count < len(pdf_files):
 
 if existing_count == 0:
     if pdf_folder.exists() and pdf_folder.is_dir():
-        # Process each PDF file
+        st.sidebar.info("Processing PDFs with chunking...")
+        
+        # Process each PDF file WITH CHUNKING
         for pdf_file in pdf_files:
             try:
                 # Read PDF and extract text
-                print(f"Processing {pdf_file.name}...")
+                st.sidebar.info(f"Processing {pdf_file.name}...")
                 pdf_reader = PyPDF2.PdfReader(str(pdf_file))
                 text_content = ""
                 
@@ -86,34 +105,42 @@ if existing_count == 0:
                 for page in pdf_reader.pages:
                     text_content += page.extract_text() + "\n"
                 
-                # Add to collection if there's content
-
+                # CHUNK THE TEXT
                 if text_content.strip():
-                    # Create embedding using OpenAI "text-embedding-3-small"
-                    embedding = st.session_state.openai_client.embeddings.create(
-                        input=text_content,
-                        model="text-embedding-3-small"  # OpenAI embeddings model
-                    ).data[0].embedding
+                    chunks = chunk_text(text_content, chunk_size=1000, overlap=200)
+                    st.sidebar.info(f"  → Split into {len(chunks)} chunks")
                     
-            
-                    # Add to ChromaDB collection
-                    collection.add(
-                        documents=[text_content],      # The text
-                        embeddings=[embedding],         # The vector from OpenAI
-                        ids=[pdf_file.name],           # Unique ID (filename)
-                        metadatas=[{"filename": pdf_file.name}]  # Metadata
-                    )
+                    # Add each chunk to the collection
+                    for i, chunk in enumerate(chunks):
+                        # Create embedding for this chunk
+                        embedding = st.session_state.openai_client.embeddings.create(
+                            input=chunk,
+                            model="text-embedding-3-small"
+                        ).data[0].embedding
+                        
+                        # Add to ChromaDB collection with unique ID per chunk
+                        collection.add(
+                            documents=[chunk],
+                            embeddings=[embedding],
+                            ids=[f"{pdf_file.name}_chunk_{i}"],
+                            metadatas=[{
+                                "filename": pdf_file.name,
+                                "chunk_index": i,
+                                "total_chunks": len(chunks)
+                            }]
+                        )
+                    
+                    st.sidebar.success(f"✅ Loaded: {pdf_file.name} ({len(chunks)} chunks)")
                     
             except Exception as e:
                 st.sidebar.error(f"Error loading {pdf_file.name}: {str(e)}")
 
 
-# After your existing code where you stored the collection...
+# Store collection in session state
 st.session_state.Lab4_VectorDB = collection
 
-
 st.sidebar.write(
-    f"📚 Documents in database: {st.session_state.Lab4_VectorDB.count()}"
+    f"📚 Chunks in database: {st.session_state.Lab4_VectorDB.count()}"
 )
 
 # Initialize chat history
@@ -126,66 +153,70 @@ for message in st.session_state.messages:
         st.markdown(message["content"])
 
 # Chat input
-if prompt := st.chat_input("Ask me anything about ist courses"):
+if prompt := st.chat_input("Ask me anything about IST courses"):
     
     # Display user message
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
     
-    # QUERY THE VECTOR DATABASE
+    # ALWAYS QUERY THE VECTOR DATABASE FIRST
     # Step 1: Create embedding for user's question
     query_embedding = st.session_state.openai_client.embeddings.create(
         input=prompt,
         model="text-embedding-3-small"
     ).data[0].embedding
     
-    # Step 2: Search the vector database for relevant documents
+    # Step 2: Search the vector database for relevant chunks
     results = st.session_state.Lab4_VectorDB.query(
         query_embeddings=[query_embedding],
-        n_results=3  # Get top 3 most relevant documents
+        n_results=5  # Get top 5 most relevant chunks
     )
     
     # Step 3: Extract the relevant context
     relevant_docs = results.get("documents", [[]])[0]
-    context = "\n\n".join(relevant_docs) if relevant_docs else ""
+    context = "\n\n---\n\n".join(relevant_docs) if relevant_docs else ""
     
-    # Step 4: Create enhanced prompt with context
-    system_prompt = """You are an information assistant with access to specific ist course syllabus documents. Use the provided context to answer the user's question. Always cite your sources from the context when answering. If the information is not in the context, say so.
+    # Get unique filenames from chunks
+    filenames = set()
+    for metadata in results.get("metadatas", [[]])[0]:
+        filenames.add(metadata.get("filename", "Unknown"))
+    files_used = ", ".join(sorted(filenames))
+    
+    # Step 4: Create system prompt that handles BOTH cases
+    system_prompt = """You are an IST course information assistant with access to course syllabus documents.
 
-CRITICAL REQUIREMENTS:
-1. You MUST declare which specific file(s) you are using to answer each question
-2. Format your responses like this:
-   - "Based on [filename], [answer]..."
-   - "According to [filename], [answer]..."
-   - "Using information from [filename], [answer]..."
+CRITICAL INSTRUCTIONS:
+1. You will be provided with context from IST course documents
+2. FIRST, check if the answer is in the provided context
+3. If the answer IS in the context:
+   - Start with: "Based on [filename]..." or "According to [filename]..."
+   - Cite which specific file(s) you're using
+   - Answer using ONLY the information from the context
+   
+4. If the answer is NOT in the context:
+   - Start with: "I didn't find this in the course documents, but..."
+   - Then provide an answer using your general knowledge
+   - Be helpful and informative
+   
+5. Be clear about which case you're in (found in docs vs. using general knowledge)
 
-3. ALWAYS mention the filename at the START of your response
+Examples:
+- Found in docs: "Based on IST140_syllabus.pdf, the course prerequisites are..."
+- Not found: "I didn't find this in the course documents, but I can help explain. Python is a programming language..."
+"""
 
-4. When using multiple files, list them: "Based on file1.pdf and file2.pdf..."
+    enhanced_prompt = f"""Context from IST course documents: {files_used}
 
-5. When information is NOT in the documents:
-   - State: "I cannot find this information in the provided ist course syllabus documents."
-
-6. Be specific - always declare your source file!
-
-Example good responses:
-- "Based on mission_statement.pdf, the church's mission is..."
-- "According to bylaws.pdf and history.pdf, the church was founded..."
-- "I cannot find this information in the provided ist course syllabus documents (searched: bylaws.pdf, history.pdf, events.pdf)."
-
-Remember: ALWAYS declare which file you're using!"""
-
-    enhanced_prompt = f"""Use the following context from ist courses to answer the question.
-
-Context:
 {context}
 
-Question: {prompt}
+User Question: {prompt}
 
-Answer based on the context above. If the answer is not in the context, say so."""
+Instructions: 
+- If the answer is in the context above, cite your sources and answer based on the documents
+- If the answer is NOT in the context, say "I didn't find this in the course documents, but..." and provide a helpful answer using general knowledge"""
     
-    # Step 5: Get response from ChatGPT with context
+    # Step 5: Get response from ChatGPT
     with st.chat_message("assistant"):
         stream = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -199,13 +230,26 @@ Answer based on the context above. If the answer is not in the context, say so."
     
     # Save assistant response
     st.session_state.messages.append({"role": "assistant", "content": response})
+    
+    # Store results for sidebar display
+    st.session_state.last_results = results
 
-# Sidebar to show retrieved documents
-if st.sidebar.checkbox("Show retrieved documents"):
-    if "results" in locals() and results:
-        st.sidebar.write("### Retrieved Files:")
-        # results["metadatas"][0] contains metadata for top matches
-        for metadata in results["metadatas"][0]:
-            st.sidebar.write(f"- {metadata['filename']}")
+# Sidebar to show retrieved chunks
+if st.sidebar.checkbox("Show retrieved chunks"):
+    if hasattr(st.session_state, 'last_results') and st.session_state.last_results:
+        results = st.session_state.last_results
+        st.sidebar.write("### Retrieved Chunks:")
+        
+        for i, metadata in enumerate(results["metadatas"][0], 1):
+            filename = metadata.get("filename", "Unknown")
+            chunk_idx = metadata.get("chunk_index", "?")
+            total = metadata.get("total_chunks", "?")
+            
+            st.sidebar.write(f"{i}. **{filename}** (chunk {chunk_idx + 1}/{total})")
     else:
         st.sidebar.write("No retrieval performed yet.")
+
+# Clear chat button
+if st.sidebar.button("Clear Chat History"):
+    st.session_state.messages = []
+    st.rerun()
