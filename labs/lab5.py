@@ -1,6 +1,8 @@
 import requests
 import streamlit as st
 import os
+import json
+from openai import OpenAI
 
 
 # location in form City, State, Country
@@ -95,3 +97,115 @@ if city := st.chat_input('Enter a city...'):
             st.error(response)
 
     st.session_state.weather_messages.append({'role': 'assistant', 'content': response})
+
+
+
+st.markdown("---")
+st.title("👔 What to Wear Bot")
+st.write("Enter a city and I'll tell you what to wear and suggest outdoor activities!")
+
+# Initialize OpenAI client
+openai_client = OpenAI(api_key=st.secrets.get("OPENAI_API_KEY", ""))
+
+# ===== DEFINE WEATHER TOOL/FUNCTION FOR OpenAI =====
+weather_tool = {
+    "type": "function",
+    "function": {
+        "name": "get_current_weather",
+        "description": "Get the current weather for a given location",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "location": {
+                    "type": "string",
+                    "description": "The city and state/country, e.g., 'Syracuse, NY, US' or 'London'",
+                }
+            },
+            "required": ["location"],
+        },
+    },
+}
+
+# User input for "What to Wear" bot
+user_city = st.text_input("Enter a city (or leave blank for Syracuse, NY):", key="wear_city")
+
+if st.button("Get Clothing Advice"):
+    if not user_city:
+        user_city = "Syracuse, NY, US"  # Default location
+    
+    with st.spinner(f"Getting weather and clothing advice for {user_city}..."):
+        # Step 1: Call OpenAI with the tool
+        messages = [
+            {
+                "role": "system",
+                "content": "You are a helpful assistant that provides clothing and outdoor activity suggestions based on weather."
+            },
+            {
+                "role": "user",
+                "content": f"What should I wear and what outdoor activities can I do in {user_city} today?"
+            }
+        ]
+        
+        try:
+            # First API call - LLM decides if it needs weather info
+            response = openai_client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages,
+                tools=[weather_tool],
+                tool_choice="auto"  # Let the model decide when to call the tool
+            )
+            
+            response_message = response.choices[0].message
+            
+            # Check if the model wants to call the weather function
+            if response_message.tool_calls:
+                # Step 2: Execute the weather function
+                tool_call = response_message.tool_calls[0]
+                function_args = json.loads(tool_call.function.arguments)
+                location = function_args.get("location", "Syracuse, NY, US")
+                
+                st.info(f"🔍 Fetching weather for: {location}")
+                
+                # Get weather data
+                weather_data = get_current_weather(location, weather_api_key)
+                
+                # Format weather info for the LLM
+                weather_info = (
+                    f"Current weather in {weather_data['location']}:\n"
+                    f"- Condition: {weather_data['condition']}\n"
+                    f"- Temperature: {weather_data['temperature']}°F\n"
+                    f"- Feels like: {weather_data['feels_like']}°F\n"
+                    f"- Low/High: {weather_data['temp_min']}°F / {weather_data['temp_max']}°F\n"
+                    f"- Humidity: {weather_data['humidity']}%"
+                )
+                
+                # Step 3: Send weather info back to the model
+                messages.append(response_message)  # Add assistant's tool call
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "name": "get_current_weather",
+                        "content": weather_info
+                    }
+                )
+                
+                # Second API call - Get clothing/activity suggestions
+                second_response = openai_client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=messages
+                )
+                
+                final_response = second_response.choices[0].message.content
+                
+                # Display results
+                st.success("**Clothing & Activity Suggestions:**")
+                st.markdown(final_response)
+                
+            else:
+                # Model responded without needing weather data
+                st.info(response_message.content)
+                
+        except Exception as e:
+            st.error(f"Error: {str(e)}")
+
