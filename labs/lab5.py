@@ -111,9 +111,18 @@ if submit:
             tool_call = tool_calls[0]
             arguments = json.loads(tool_call.function.arguments or '{}')
             requested_location = arguments.get('location', '').strip() if isinstance(arguments, dict) else ''
+            requested_location = requested_location.strip('"\' ') if requested_location else ''
             resolved_location = requested_location if requested_location else DEFAULT_LOCATION
+            weather_used_default = False
 
-            weather = get_current_weather(resolved_location, weather_api_key)
+            try:
+                weather = get_current_weather(resolved_location, weather_api_key)
+            except Exception as weather_exc:
+                if '404 error' in str(weather_exc).lower() and resolved_location != DEFAULT_LOCATION:
+                    weather = get_current_weather(DEFAULT_LOCATION, weather_api_key)
+                    weather_used_default = True
+                else:
+                    raise
 
             second_messages = [
                 {
@@ -142,6 +151,11 @@ if submit:
             )
 
             advice = second_response.choices[0].message.content or 'No advice returned.'
+
+            if weather_used_default:
+                st.info(
+                    f"I couldn't find weather for '{resolved_location}', so I used {DEFAULT_LOCATION} instead."
+                )
 
             st.subheader(f"Weather Snapshot ({weather['location']})")
             st.markdown(
