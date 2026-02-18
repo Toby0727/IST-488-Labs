@@ -1,5 +1,6 @@
 import requests
 import streamlit as st
+import os
 
 
 # location in form City, State, Country
@@ -51,7 +52,13 @@ if 'weather_messages' not in st.session_state:
         }
     ]
 
-weather_api_key = st.secrets.get('OPENWEATHERMAP_API_KEY', '')
+weather_api_key = st.secrets.get('OPENWEATHERMAP_API_KEY', '') or os.getenv('OPENWEATHERMAP_API_KEY', '')
+
+if not weather_api_key:
+    st.warning(
+        'OpenWeather API key not configured. Add OPENWEATHERMAP_API_KEY in .streamlit/secrets.toml '
+        'or set the OPENWEATHERMAP_API_KEY environment variable.'
+    )
 
 for message in st.session_state.weather_messages:
     with st.chat_message(message['role']):
@@ -64,7 +71,10 @@ if city := st.chat_input('Enter a city...'):
 
     with st.chat_message('assistant'):
         if not weather_api_key:
-            response = 'Missing OPENWEATHERMAP_API_KEY in .streamlit/secrets.toml'
+            response = (
+                'Missing OpenWeather API key. Add OPENWEATHERMAP_API_KEY to .streamlit/secrets.toml '
+                'or set the OPENWEATHERMAP_API_KEY environment variable, then refresh the app.'
+            )
             st.error(response)
             st.session_state.weather_messages.append({'role': 'assistant', 'content': response})
             st.stop()
