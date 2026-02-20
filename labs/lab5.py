@@ -70,52 +70,9 @@ if not openai_api_key:
     st.stop()
 
 # ========================================
-# SECTION 1: WEATHER LOOKUP (CHATBOT)
+# SECTION: "WHAT TO WEAR" BOT
 # ========================================
 
-st.title('🌤️ Weather Lookup')
-st.write('Type a city name and get current weather info.')
-
-if 'weather_messages' not in st.session_state:
-    st.session_state.weather_messages = [
-        {
-            'role': 'assistant',
-            'content': 'Hi! Enter a city like "Syracuse, NY, US" or "London".',
-        }
-    ]
-
-for message in st.session_state.weather_messages:
-    with st.chat_message(message['role']):
-        st.markdown(message['content'])
-
-if city := st.chat_input('Enter a city...'):
-    st.session_state.weather_messages.append({'role': 'user', 'content': city})
-    with st.chat_message('user'):
-        st.markdown(city)
-
-    with st.chat_message('assistant'):
-        try:
-            weather = get_current_weather(city, weather_api_key)
-            response = (
-                f"**Weather for {weather['location']}**\n\n"
-                f"- Condition: {weather['condition']}\n"
-                f"- Temperature: {weather['temperature']}°F\n"
-                f"- Feels like: {weather['feels_like']}°F\n"
-                f"- Low / High: {weather['temp_min']}°F / {weather['temp_max']}°F\n"
-                f"- Humidity: {weather['humidity']}%"
-            )
-            st.markdown(response)
-        except Exception as exc:
-            response = f"I couldn't get weather for '{city}'. {exc}"
-            st.error(response)
-
-    st.session_state.weather_messages.append({'role': 'assistant', 'content': response})
-
-# ========================================
-# SECTION 2: "WHAT TO WEAR" BOT
-# ========================================
-
-st.markdown("---")
 st.title("👔 What to Wear Bot")
 st.write("Enter a city and I'll tell you what to wear and suggest outdoor activities!")
 
