@@ -28,8 +28,8 @@ def get_current_weather(location, api_key, units='imperial'):
     if response.status_code == 401:
         raise Exception('Authentication failed: Invalid API key (401 Unauthorized)')
     if response.status_code == 404:
-        error_message = response.json().get('message')
-        raise Exception(f'404 error: {error_message}')
+        error_message = response.json().get('message', 'City not found')
+        raise Exception(f'City not found: {location}. Try including the country code (e.g., "London, UK" or "Paris, France")')
     if response.status_code != 200:
         raise Exception(f'Weather API error: {response.status_code}')
 
@@ -76,6 +76,23 @@ if not openai_api_key:
 st.title("👔 What to Wear Bot")
 st.write("Enter a city and I'll tell you what to wear and suggest outdoor activities!")
 
+# Add helpful examples
+with st.expander("💡 City Name Examples"):
+    st.write("""
+    **Good formats:**
+    - Syracuse, NY, US
+    - New York, NY, US
+    - London, UK
+    - Paris, France
+    - Tokyo, Japan
+    - Lima, Peru
+    
+    **Tips:**
+    - Include country code for best results
+    - Use full city names (not abbreviations)
+    - Check spelling carefully
+    """)
+
 # Initialize OpenAI client
 openai_client = OpenAI(api_key=openai_api_key)
 
@@ -84,13 +101,13 @@ weather_tool = {
     "type": "function",
     "function": {
         "name": "get_current_weather",
-        "description": "Get the current weather for a given location. If no location is provided, use 'Syracuse, NY' as default.",
+        "description": "Get the current weather for a given location. If no location is provided, use 'Syracuse, NY, US' as default.",
         "parameters": {
             "type": "object",
             "properties": {
                 "location": {
                     "type": "string",
-                    "description": "City and state/country, e.g., 'Syracuse, NY, US' or 'London'. Defaults to 'Syracuse, NY' if not provided.",
+                    "description": "City and state/country, e.g., 'Syracuse, NY, US' or 'London, UK'. Defaults to 'Syracuse, NY, US' if not provided.",
                 }
             },
         },
@@ -98,12 +115,16 @@ weather_tool = {
 }
 
 # User input
-user_city = st.text_input("Enter a city (or leave blank for Syracuse, NY):", key="wear_city")
+user_city = st.text_input(
+    "Enter a city (or leave blank for Syracuse, NY, US):", 
+    key="wear_city",
+    placeholder="e.g., Syracuse, NY, US or London, UK"
+)
 
 if st.button("Get Clothing Advice"):
     # Use default if no city provided
     if not user_city or not user_city.strip():
-        user_city = "Syracuse, NY"
+        user_city = "Syracuse, NY, US"
     
     with st.spinner(f"Getting weather and clothing advice for {user_city}..."):
         messages = [
@@ -132,25 +153,32 @@ if st.button("Get Clothing Advice"):
             if response_message.tool_calls:
                 tool_call = response_message.tool_calls[0]
                 function_args = json.loads(tool_call.function.arguments)
-                location = function_args.get("location", "Syracuse, NY")
+                location = function_args.get("location", "Syracuse, NY, US")
                 
                 # Handle empty location
                 if not location or not str(location).strip():
-                    location = "Syracuse, NY"
+                    location = "Syracuse, NY, US"
                 
                 st.info(f"🔍 Fetching weather for: {location}")
                 
-                # Step 3: Get weather data
+                # Step 3: Get weather data with fallback
                 try:
                     weather_data = get_current_weather(location, weather_api_key)
                 except Exception as weather_error:
-                    if "404 error" in str(weather_error) and location != "Syracuse, NY":
-                        fallback_location = "Syracuse, NY"
+                    error_message = str(weather_error)
+                    
+                    # If city not found and it's not Syracuse, try Syracuse as fallback
+                    if "City not found" in error_message and location.lower() != "syracuse, ny, us":
+                        fallback_location = "Syracuse, NY, US"
                         st.warning(
-                            f"Couldn't find weather for '{location}'. Using default location: {fallback_location}."
+                            f"⚠️ Couldn't find weather for '{location}'. "
+                            f"Using default location: {fallback_location}.\n\n"
+                            f"**Tip:** Try including the country code (e.g., 'London, UK' or 'Paris, France')"
                         )
                         weather_data = get_current_weather(fallback_location, weather_api_key)
+                        location = fallback_location
                     else:
+                        # Re-raise if it's a different error or if Syracuse itself failed
                         raise
                 
                 # Format weather info
@@ -189,29 +217,20 @@ if st.button("Get Clothing Advice"):
                 st.info(response_message.content)
                 
         except Exception as e:
-            st.error(f"Error: {str(e)}")
+            st.error(f"❌ Error: {str(e)}")
+            st.info("💡 **Troubleshooting tips:**\n- Check your city name spelling\n- Include country code (e.g., 'London, UK')\n- Try using the format: City, State, Country")
 
-# ========================================
-# TESTING SECTION (Optional - can comment out)
-# ========================================
 
-with st.expander("🧪 Test Weather Function"):
-    st.write("Test the get_current_weather function with different cities:")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        if st.button("Test Syracuse, NY, US"):
+    # Custom test input
+    test_city = st.text_input("Test a custom city:", placeholder="e.g., Paris, France")
+    if st.button("Test Custom City"):
+        if test_city:
             try:
-                result = get_current_weather("Syracuse, NY, US", weather_api_key)
-                st.json(result)
+                with st.spinner(f"Fetching weather for {test_city}..."):
+                    result = get_current_weather(test_city, weather_api_key)
+                    st.success(f"✅ Weather data for {test_city}:")
+                    st.json(result)
             except Exception as e:
-                st.error(str(e))
-    
-    with col2:
-        if st.button("Test Lima, Peru"):
-            try:
-                result = get_current_weather("Lima, Peru", weather_api_key)
-                st.json(result)
-            except Exception as e:
-                st.error(str(e))
+                st.error(f"❌ {str(e)}")
+        else:
+            st.warning("Please enter a city name")
