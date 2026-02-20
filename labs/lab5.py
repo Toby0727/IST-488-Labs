@@ -4,12 +4,22 @@ import os
 import json
 from openai import OpenAI
 
-
-# location in form City, State, Country
-# e.g., Syracuse, NY, US
-# default units is degrees Fahrenheit
+# ========================================
+# PART A: WEATHER DATA FUNCTION
+# ========================================
 
 def get_current_weather(location, api_key, units='imperial'):
+    """
+    Get current weather for a location.
+    
+    Args:
+        location: City name in format "City, State, Country" (e.g., "Syracuse, NY, US")
+        api_key: OpenWeatherMap API key
+        units: Temperature units ('imperial' for Fahrenheit, 'metric' for Celsius)
+    
+    Returns:
+        Dictionary with weather information
+    """
     url = (
         f'https://api.openweathermap.org/data/2.5/weather'
         f'?q={location}&appid={api_key}&units={units}'
@@ -41,9 +51,29 @@ def get_current_weather(location, api_key, units='imperial'):
         'condition': condition,
     }
 
+# ========================================
+# PAGE SETUP
+# ========================================
 
-st.set_page_config(page_title='Lab 5: Weather Chatbot', initial_sidebar_state='expanded')
-st.title('🌤️ Weather Chatbot')
+st.set_page_config(page_title='Lab 5: What to Wear Bot', initial_sidebar_state='expanded')
+
+# Get API keys
+weather_api_key = st.secrets.get('OPENWEATHERMAP_API_KEY', '') or os.getenv('OPENWEATHERMAP_API_KEY', '')
+openai_api_key = st.secrets.get('OPENAI_API_KEY', '')
+
+if not weather_api_key:
+    st.error('⚠️ OpenWeather API key not configured. Add OPENWEATHERMAP_API_KEY to secrets.toml')
+    st.stop()
+
+if not openai_api_key:
+    st.error('⚠️ OpenAI API key not configured. Add OPENAI_API_KEY to secrets.toml')
+    st.stop()
+
+# ========================================
+# SECTION 1: WEATHER LOOKUP (CHATBOT)
+# ========================================
+
+st.title('🌤️ Weather Lookup')
 st.write('Type a city name and get current weather info.')
 
 if 'weather_messages' not in st.session_state:
@@ -53,14 +83,6 @@ if 'weather_messages' not in st.session_state:
             'content': 'Hi! Enter a city like "Syracuse, NY, US" or "London".',
         }
     ]
-
-weather_api_key = st.secrets.get('OPENWEATHERMAP_API_KEY', '') or os.getenv('OPENWEATHERMAP_API_KEY', '')
-
-if not weather_api_key:
-    st.warning(
-        'OpenWeather API key not configured. Add OPENWEATHERMAP_API_KEY in .streamlit/secrets.toml '
-        'or set the OPENWEATHERMAP_API_KEY environment variable.'
-    )
 
 for message in st.session_state.weather_messages:
     with st.chat_message(message['role']):
@@ -72,15 +94,6 @@ if city := st.chat_input('Enter a city...'):
         st.markdown(city)
 
     with st.chat_message('assistant'):
-        if not weather_api_key:
-            response = (
-                'Missing OpenWeather API key. Add OPENWEATHERMAP_API_KEY to .streamlit/secrets.toml '
-                'or set the OPENWEATHERMAP_API_KEY environment variable, then refresh the app.'
-            )
-            st.error(response)
-            st.session_state.weather_messages.append({'role': 'assistant', 'content': response})
-            st.stop()
-
         try:
             weather = get_current_weather(city, weather_api_key)
             response = (
@@ -98,47 +111,48 @@ if city := st.chat_input('Enter a city...'):
 
     st.session_state.weather_messages.append({'role': 'assistant', 'content': response})
 
-
+# ========================================
+# SECTION 2: "WHAT TO WEAR" BOT
+# ========================================
 
 st.markdown("---")
 st.title("👔 What to Wear Bot")
 st.write("Enter a city and I'll tell you what to wear and suggest outdoor activities!")
 
 # Initialize OpenAI client
-openai_client = OpenAI(api_key=st.secrets.get("OPENAI_API_KEY", ""))
+openai_client = OpenAI(api_key=openai_api_key)
 
-# ===== DEFINE WEATHER TOOL/FUNCTION FOR OpenAI =====
+# Define weather tool for OpenAI function calling
 weather_tool = {
     "type": "function",
     "function": {
         "name": "get_current_weather",
-        "description": "Get the current weather for a given location",
+        "description": "Get the current weather for a given location. If no location is provided, use 'Syracuse, NY' as default.",
         "parameters": {
             "type": "object",
             "properties": {
                 "location": {
                     "type": "string",
-                    "description": "The city and state/country, e.g., 'Syracuse, NY, US' or 'London'",
+                    "description": "City and state/country, e.g., 'Syracuse, NY, US' or 'London'. Defaults to 'Syracuse, NY' if not provided.",
                 }
             },
-            "required": ["location"],
         },
     },
 }
 
-# User input for "What to Wear" bot
+# User input
 user_city = st.text_input("Enter a city (or leave blank for Syracuse, NY):", key="wear_city")
 
 if st.button("Get Clothing Advice"):
-    if not user_city:
-        user_city = "Syracuse, NY, US"  # Default location
+    # Use default if no city provided
+    if not user_city or not user_city.strip():
+        user_city = "Syracuse, NY"
     
     with st.spinner(f"Getting weather and clothing advice for {user_city}..."):
-        # Step 1: Call OpenAI with the tool
         messages = [
             {
                 "role": "system",
-                "content": "You are a helpful assistant that provides clothing and outdoor activity suggestions based on weather."
+                "content": "You are a helpful fashion and outdoor activity advisor. Provide clothing suggestions based on weather and recommend appropriate outdoor activities."
             },
             {
                 "role": "user",
@@ -147,29 +161,32 @@ if st.button("Get Clothing Advice"):
         ]
         
         try:
-            # First API call - LLM decides if it needs weather info
+            # Step 1: First API call with tool
             response = openai_client.chat.completions.create(
                 model="gpt-4o",
                 messages=messages,
                 tools=[weather_tool],
-                tool_choice="auto"  # Let the model decide when to call the tool
+                tool_choice="auto"  # Model decides when to call the tool
             )
             
             response_message = response.choices[0].message
             
-            # Check if the model wants to call the weather function
+            # Step 2: Check if model wants to call weather function
             if response_message.tool_calls:
-                # Step 2: Execute the weather function
                 tool_call = response_message.tool_calls[0]
                 function_args = json.loads(tool_call.function.arguments)
-                location = function_args.get("location", "Syracuse, NY, US")
+                location = function_args.get("location", "Syracuse, NY")
+                
+                # Handle empty location
+                if not location or not str(location).strip():
+                    location = "Syracuse, NY"
                 
                 st.info(f"🔍 Fetching weather for: {location}")
                 
-                # Get weather data
+                # Step 3: Get weather data
                 weather_data = get_current_weather(location, weather_api_key)
                 
-                # Format weather info for the LLM
+                # Format weather info
                 weather_info = (
                     f"Current weather in {weather_data['location']}:\n"
                     f"- Condition: {weather_data['condition']}\n"
@@ -179,18 +196,16 @@ if st.button("Get Clothing Advice"):
                     f"- Humidity: {weather_data['humidity']}%"
                 )
                 
-                # Step 3: Send weather info back to the model
-                messages.append(response_message)  # Add assistant's tool call
-                messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": tool_call.id,
-                        "name": "get_current_weather",
-                        "content": weather_info
-                    }
-                )
+                # Step 4: Add tool response to messages
+                messages.append(response_message)
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "name": "get_current_weather",
+                    "content": weather_info
+                })
                 
-                # Second API call - Get clothing/activity suggestions
+                # Step 5: Second API call with weather context
                 second_response = openai_client.chat.completions.create(
                     model="gpt-4o",
                     messages=messages
@@ -203,9 +218,33 @@ if st.button("Get Clothing Advice"):
                 st.markdown(final_response)
                 
             else:
-                # Model responded without needing weather data
+                # Model responded without needing weather
                 st.info(response_message.content)
                 
         except Exception as e:
             st.error(f"Error: {str(e)}")
 
+# ========================================
+# TESTING SECTION (Optional - can comment out)
+# ========================================
+
+with st.expander("🧪 Test Weather Function"):
+    st.write("Test the get_current_weather function with different cities:")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("Test Syracuse, NY, US"):
+            try:
+                result = get_current_weather("Syracuse, NY, US", weather_api_key)
+                st.json(result)
+            except Exception as e:
+                st.error(str(e))
+    
+    with col2:
+        if st.button("Test Lima, Peru"):
+            try:
+                result = get_current_weather("Lima, Peru", weather_api_key)
+                st.json(result)
+            except Exception as e:
+                st.error(str(e))
