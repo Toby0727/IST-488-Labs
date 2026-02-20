@@ -141,7 +141,17 @@ if st.button("Get Clothing Advice"):
                 st.info(f"🔍 Fetching weather for: {location}")
                 
                 # Step 3: Get weather data
-                weather_data = get_current_weather(location, weather_api_key)
+                try:
+                    weather_data = get_current_weather(location, weather_api_key)
+                except Exception as weather_error:
+                    if "404 error" in str(weather_error) and location != "Syracuse, NY":
+                        fallback_location = "Syracuse, NY"
+                        st.warning(
+                            f"Couldn't find weather for '{location}'. Using default location: {fallback_location}."
+                        )
+                        weather_data = get_current_weather(fallback_location, weather_api_key)
+                    else:
+                        raise
                 
                 # Format weather info
                 weather_info = (
